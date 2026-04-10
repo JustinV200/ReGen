@@ -1,2 +1,2 @@
-from .model import Model
+from models import Model
 from .extractor import Extractor

@@ -2,7 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from input_processing import Reader, chunker
-from extractor import Model, Extractor
+from models import Model
+from extractor import Extractor
 from analyzer import Analyzer
 from reportgenerator import reportMaker
 
@@ -62,11 +63,10 @@ def main():
     #    "https://www.cdc.gov/covid/about/index.html"
 
     #]
-    #sources = ["https://www.yahoo.com/news/articles/anthropic-claude-mythos-model-sparks-202726438.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuYmluZy5jb20v&guce_referrer_sig=AQAAAAHegMlBVKKEMWo1s2T6ZrOMyGfLkfN5EtJdkgqw-7Z2E1DGCrGap2UQ-I0v7O0uTCmdWAAM0ewvDofcpPEM-i99qYWq9vUbMcnpg98fuE8O681rEtao9iZuqLfiLRCGxhlwxTAYnGY8JCv8DiJycccCMrgE2of37qsio4skXa63",
-    #           "https://www.theatlantic.com/technology/2026/04/claude-mythos-hacking/686746/",
-    #           "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]'
-    sources = ["https://www.nbcnews.com/world/iran/live-blog/live-updates-iran-war-ceasefire-trump-hormuz-israel-lebanon-rcna267390"]
-    mode = "brief" #"standard" or "brief" or "detailed"
+    sources = ["https://www.yahoo.com/news/articles/anthropic-claude-mythos-model-sparks-202726438.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuYmluZy5jb20v&guce_referrer_sig=AQAAAAHegMlBVKKEMWo1s2T6ZrOMyGfLkfN5EtJdkgqw-7Z2E1DGCrGap2UQ-I0v7O0uTCmdWAAM0ewvDofcpPEM-i99qYWq9vUbMcnpg98fuE8O681rEtao9iZuqLfiLRCGxhlwxTAYnGY8JCv8DiJycccCMrgE2of37qsio4skXa63",
+               "https://www.theatlantic.com/technology/2026/04/claude-mythos-hacking/686746/",
+               "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]'
+    mode = "standard" #"standard" or "brief" or "detailed"
     print(f"Running in {mode} mode with {len(sources)} sources...")
     model = Model()
     config = get_mode_config(mode, len(sources))

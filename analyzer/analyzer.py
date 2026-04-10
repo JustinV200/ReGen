@@ -1,6 +1,6 @@
 import json
 
-from extractor import Model
+from models import Model
 
 
 ANALYZE_PROMPT = """You are a data analyst. You are given a structured extraction (entities, statistics, claims, summary) from a single source document. Your job is NOT to re-extract — all the facts are already provided. Your job is to INTERPRET the data.

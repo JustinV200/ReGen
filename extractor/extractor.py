@@ -1,5 +1,46 @@
 import json
-from .model import Model
+from models import Model
+
+EXTRACT_PROMPT = """You are a data extraction assistant. Extract structured information from the following content.
+
+Return ONLY valid JSON in this exact format:
+{
+    "entities": ["list of key entities, organizations, people mentioned"],
+    "statistics": [
+        {"metric": "name", "value": 0, "unit": "unit", "context": "full date with year, source, and what the number specifically measures"}
+    ],
+    "claims": [
+        {"statement": "a key claim made", "evidence_quote": "supporting quote from text"}
+    ],
+    "summary": "2-3 sentence summary of this content"
+}
+
+RULES:
+- Always include the FULL YEAR in any date (e.g. "September 6, 2021" not "week of Sep 6th")
+- Be specific about what each metric measures — include who, what, where, when
+- If the source is vague about a date or metric, note that in the context field
+
+Content:
+"""
+
+TABLE_PROMPT = """You are a data extraction assistant. Analyze this table data and extract key statistics and insights.
+
+Return ONLY valid JSON in the same format as above.
+
+Table data:
+"""
+
+REDUCE_PROMPT = """You are given extractions from multiple chunks of the same document.
+Consolidate into a single extraction:
+- Deduplicate entities
+- Merge statistics (flag contradictions)
+- Keep only well-supported claims
+- Write one overall document summary
+
+Return ONLY valid JSON in the same structured format.
+
+Chunk extractions:
+"""
 
 #map: extract key info from each chunk individually
 #reduce: if combined extractions exceed token limit, recursively split and reduce groups, then merge results up the chain
@@ -14,9 +55,9 @@ class Extractor:
     # handline individual chunk
     def extract_chunk(self, chunk):
         if chunk["chunk_type"] == "table":
-            prompt = self.model.table_prompt + json.dumps(chunk["content"])
+            prompt = TABLE_PROMPT + json.dumps(chunk["content"])
         else:
-            prompt = self.model.extract_prompt + chunk["content"]
+            prompt = EXTRACT_PROMPT + chunk["content"]
         return self.model.call(prompt)
     
 
@@ -50,7 +91,7 @@ class Extractor:
 
         # if it fits, do the final reduce in one call
         if len(text.split()) <= self.max_tokens:
-            prompt = self.model.reduce_prompt + text
+            prompt = REDUCE_PROMPT + text
             return self._safe_call(prompt)
 
         # too big — batch reduce: group into chunks of batch_size, reduce each group, then recurse
@@ -61,7 +102,7 @@ class Extractor:
             print(f"    Reduce batch {i}/{len(batches)} ({len(batch)} items)...", end=" ", flush=True)
             batch_text = json.dumps(batch, indent=2)
             if len(batch_text.split()) <= self.max_tokens:
-                prompt = self.model.reduce_prompt + batch_text
+                prompt = REDUCE_PROMPT + batch_text
                 reduced.append(self._safe_call(prompt))
             else:
                 # batch still too big, halve it
