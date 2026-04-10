@@ -3,25 +3,33 @@ load_dotenv()
 
 from input_processing import Reader, chunker
 from extractor import Model, Extractor
+from analyzer import Analyzer
 from reportgenerator import reportMaker
 
 def main():
-    source = "https://www.usatoday.com/story/news/health/2025/09/15/covid-19-september-2025-cases-variants-symptoms-vaccines/86163707007/"  # or a URL
+    sources = [
+        "https://www.usatoday.com/story/news/health/2025/09/15/covid-19-september-2025-cases-variants-symptoms-vaccines/86163707007/",
+        "https://www.cdc.gov/covid/php/surveillance/index.html"
+    ]
 
-    # Step 1: Read and parse the source
-    reader = Reader(source)
-    parsed = reader.parse()
+    model = Model()
 
-    # Step 2: Chunk the parsed content
-    chunks = chunker(parsed)
+    # Step 1-3: For each source, read, parse, chunk, and extract
+    extractions = []
+    for source in sources:
+        reader = Reader(source)
+        parsed = reader.parse()
+        chunks = chunker(parsed)
+        extractor = Extractor(model=model)
+        extractions.append(extractor.run(chunks))
 
-    # Step 3: Extract and reduce
-    extractor = Extractor(model=Model())
-    result = extractor.run(chunks)
+    # Step 4: Analyze and synthesize
+    analyzer = Analyzer(model=model)
+    analysis = analyzer.run(extractions)
 
-    # Step 4: Generate report
-    report = reportMaker(model=Model())
-    report_path = report.generate(result)
+    # Step 5: Generate report
+    report = reportMaker(model=model)
+    report_path = report.generate(analysis)
 
     print(f"Report saved to: {report_path}")
 
