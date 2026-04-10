@@ -65,6 +65,7 @@ class Extractor:
                 reduced.append(self._safe_call(prompt))
             else:
                 # batch still too big, halve it
+                #hey divide and conquer from csci311 mentioned
                 mid = len(batch) // 2
                 left = self.reduce(batch[:mid])
                 right = self.reduce(batch[mid:])

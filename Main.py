@@ -64,8 +64,9 @@ def main():
     #]
     #sources = ["https://www.yahoo.com/news/articles/anthropic-claude-mythos-model-sparks-202726438.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuYmluZy5jb20v&guce_referrer_sig=AQAAAAHegMlBVKKEMWo1s2T6ZrOMyGfLkfN5EtJdkgqw-7Z2E1DGCrGap2UQ-I0v7O0uTCmdWAAM0ewvDofcpPEM-i99qYWq9vUbMcnpg98fuE8O681rEtao9iZuqLfiLRCGxhlwxTAYnGY8JCv8DiJycccCMrgE2of37qsio4skXa63",
     #           "https://www.theatlantic.com/technology/2026/04/claude-mythos-hacking/686746/",
-    #           "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]
-    mode = "standard" # or "brief" or "detailed"
+    #           "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]'
+    sources = ["https://www.nbcnews.com/world/iran/live-blog/live-updates-iran-war-ceasefire-trump-hormuz-israel-lebanon-rcna267390"]
+    mode = "brief" #"standard" or "brief" or "detailed"
     print(f"Running in {mode} mode with {len(sources)} sources...")
     model = Model()
     config = get_mode_config(mode, len(sources))
@@ -80,17 +81,17 @@ def main():
             parsed = reader.parse()
             chunks = chunker(parsed)
         except Exception as e:
-            print(f"  ⚠ Failed to read source: {e}")
+            print(f"  Failed to read source: {e}")
             continue
         if not chunks:
-            print(f"  ⚠ No content extracted, skipping")
+            print(f" No content extracted, skipping")
             continue
         print(f"  → {len(chunks)} chunks to extract")
         extractor = Extractor(model=model)
         result = extractor.run(chunks)
         # Skip empty/unknown extractions
         if not result or (not result.get("entities") and not result.get("statistics") and not result.get("claims")):
-            print(f"  ⚠ No meaningful data extracted, skipping")
+            print(f" No meaningful data extracted, skipping")
             continue
         extractions.append(result)
         print(f"  ✓ Source {i} done")
