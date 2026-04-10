@@ -39,7 +39,10 @@ class Reader:
         return self.source.startswith("http://") or self.source.startswith("https://")
     
     def download_url(self):
-        response = requests.get(self.source)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        }
+        response = requests.get(self.source, headers=headers, timeout=30)
         response.raise_for_status()  # fail early on 4xx/5xx
 
         # get extension from Content-Type header

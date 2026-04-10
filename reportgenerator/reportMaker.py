@@ -15,6 +15,7 @@ format:
     theme: darkly
     toc: false
     number-sections: true
+    embed-resources: true
 execute:
   echo: false
   warning: false
@@ -179,6 +180,7 @@ format:
     toc: true
     toc-depth: 2
     number-sections: true
+    embed-resources: true
 execute:
   echo: false
   warning: false
@@ -257,18 +259,30 @@ execute:
         themes = synthesis.get("themes", [])
         visuals = synthesis.get("visualizations", [])
         if themes:
-            sections.append("\n## Themes\n")
-            for theme in themes:
+            for ti, theme in enumerate(themes):
                 # Find matching visualizations for this theme
                 theme_visuals = [v for v in visuals if theme.get("theme", "").lower() in v.get("rationale", "").lower() or theme.get("theme", "").lower() in v.get("title", "").lower()]
-                sections.append(self._generate_section(
-                    f"Write ### {theme.get('theme', '')} subsection. "
-                    "Write each insight as detailed narrative prose. "
-                    "Reference sources by name. "
-                    "If visualizations are provided, create ```{python} code blocks using EXACT data_points.",
-                    {"theme": theme, "visualizations": theme_visuals},
-                    depth
-                ))
+                if ti == 0:
+                    # First theme includes the ## Themes header
+                    sections.append(self._generate_section(
+                        f"Write ## Themes as the section header, then write ### {theme.get('theme', '')} as the first subsection under it. "
+                        "Write each insight as detailed narrative prose paragraphs (NOT as ### headers). "
+                        "Use ### ONLY for the subsection title. Body text must be normal paragraphs. "
+                        "Reference sources by name. "
+                        "If visualizations are provided, create ```{python} code blocks using EXACT data_points.",
+                        {"theme": theme, "visualizations": theme_visuals},
+                        depth
+                    ))
+                else:
+                    sections.append(self._generate_section(
+                        f"Write ### {theme.get('theme', '')} subsection. "
+                        "Write each insight as detailed narrative prose paragraphs (NOT as ### headers). "
+                        "Use ### ONLY for the subsection title. Body text must be normal paragraphs. "
+                        "Reference sources by name. "
+                        "If visualizations are provided, create ```{python} code blocks using EXACT data_points.",
+                        {"theme": theme, "visualizations": theme_visuals},
+                        depth
+                    ))
 
         # Source Connections (clusters)
         clusters = analysis.get("clusters")
@@ -317,11 +331,11 @@ execute:
         return "\n\n".join(sections)
 
     def generate(self, analysis, report_name="report", output_format="html"):
-        if self.config.get("include_per_source_sections", False):
-            # Detailed mode: section-by-section to avoid output token limits
+        if self.config.get("sectioned_generation", False):
+            # Multi-page: section-by-section to avoid output token limits
             qmd_content = self._fix_qmd(self._generate_sectioned(analysis, output_format))
         else:
-            # Brief/standard: single call
+            # Brief: single call
             qmd_content = self._fix_qmd(self._generate_single_call(analysis, output_format))
 
         output_path = os.path.join(self.output_dir, f"{report_name}.qmd")

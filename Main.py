@@ -30,6 +30,7 @@ def get_mode_config(mode, num_sources):
             "include_cross_source": True,
             "include_clusters": num_sources >= 3,
             "cluster_threshold": "high",           # only the strongest connections
+            "sectioned_generation": True,
         },
         "detailed": {
             "insights_per_source": 10,
@@ -41,6 +42,7 @@ def get_mode_config(mode, num_sources):
             "include_cross_source": True,
             "include_clusters": num_sources >= 2,
             "cluster_threshold": "medium",         # high + medium relevance clusters
+            "sectioned_generation": True,
         },
     }
     return base[mode]
@@ -52,15 +54,18 @@ def get_mode_config(mode, num_sources):
 
 
 def main():
-    sources = [
-        "https://www.usatoday.com/story/news/health/2025/09/15/covid-19-september-2025-cases-variants-symptoms-vaccines/86163707007/",
-        "https://www.cdc.gov/covid/php/surveillance/index.html",
-        "https://pmc.ncbi.nlm.nih.gov/articles/PMC9874793/",
-        "https://data.who.int/dashboards/covid19/summary",
-        "https://www.cdc.gov/covid/about/index.html"
+    #sources = [
+    #    "https://www.usatoday.com/story/news/health/2025/09/15/covid-19-september-2025-cases-variants-symptoms-vaccines/86163707007/",
+    #    "https://www.cdc.gov/covid/php/surveillance/index.html",
+    #    "https://pmc.ncbi.nlm.nih.gov/articles/PMC9874793/",
+    #    "https://data.who.int/dashboards/covid19/summary",
+    #    "https://www.cdc.gov/covid/about/index.html"
 
-    ]
-    mode = "detailed"
+    #]
+    #sources = ["https://www.yahoo.com/news/articles/anthropic-claude-mythos-model-sparks-202726438.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuYmluZy5jb20v&guce_referrer_sig=AQAAAAHegMlBVKKEMWo1s2T6ZrOMyGfLkfN5EtJdkgqw-7Z2E1DGCrGap2UQ-I0v7O0uTCmdWAAM0ewvDofcpPEM-i99qYWq9vUbMcnpg98fuE8O681rEtao9iZuqLfiLRCGxhlwxTAYnGY8JCv8DiJycccCMrgE2of37qsio4skXa63",
+    #           "https://www.theatlantic.com/technology/2026/04/claude-mythos-hacking/686746/",
+    #           "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]
+    mode = "standard" # or "brief" or "detailed"
     print(f"Running in {mode} mode with {len(sources)} sources...")
     model = Model()
     config = get_mode_config(mode, len(sources))
@@ -70,9 +75,13 @@ def main():
     print("Extracting information from sources...")
     for i, source in enumerate(sources, 1):
         print(f"\n[{i}/{len(sources)}] Processing: {source[:80]}...")
-        reader = Reader(source)
-        parsed = reader.parse()
-        chunks = chunker(parsed)
+        try:
+            reader = Reader(source)
+            parsed = reader.parse()
+            chunks = chunker(parsed)
+        except Exception as e:
+            print(f"  ⚠ Failed to read source: {e}")
+            continue
         if not chunks:
             print(f"  ⚠ No content extracted, skipping")
             continue
