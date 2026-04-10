@@ -61,17 +61,8 @@
     stroke-linecap="round"
     stroke-linejoin="round"
     opacity="0.15"
-    transform="translate(15, 3)"
+    transform="translate(2, 2)"
   />
-
-  <!-- Scanning dot that follows the heartbeat -->
-  <circle r="4" fill="#dc3545" filter="url(#softGlow)" opacity="0.8">
-    <animateMotion
-      path="M0,100 L80,100 120,100 150,100 170,98 180,100 200,100 240,100 260,100 280,102 290,100 310,70 320,130 330,50 340,150 350,80 360,100 380,100 400,100 420,100 440,100 460,98 470,100 490,100 510,70 520,130 530,50 540,150 550,80 560,100 580,100 620,100 650,100 670,102 680,100 700,100 740,100 800,100"
-      dur="4s"
-      repeatCount="indefinite"
-    />
-  </circle>
 
   <!-- Main title -->
   <text x="400" y="110" text-anchor="middle" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="url(#textGrad)" filter="url(#glow)" letter-spacing="8">
