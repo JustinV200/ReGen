@@ -75,26 +75,26 @@ $env:QUARTO_PYTHON = "C:\path\to\python.exe"
 ## Usage
 
 ```bash
-python Main.py [sources...] [options]
+python ReGen.py [sources...] [options]
 ```
 
 **Examples:**
 
 ```bash
 # Single URL, standard mode
-python Main.py https://example.com/article
+python ReGen.py https://example.com/article
 
 # Multiple sources with detailed mode, auto-render to HTML
-python Main.py https://example.com/article data/study.pdf -m detailed --render
+python ReGen.py https://example.com/article data/study.pdf -m detailed --render
 
 # Sources from a text file (one URL/path per line, # comments ignored)
-python Main.py sources.txt -m brief --name my_report
+python ReGen.py sources.txt -m brief --name my_report
 
 # PDF output with custom model and verbose logging
-python Main.py paper.pdf -o pdf --model gpt-4o -v
+python ReGen.py paper.pdf -o pdf --model gpt-4o -v
 
 # Quiet mode — only errors and final path printed
-python Main.py https://example.com -q --render
+python ReGen.py https://example.com -q --render
 ```
 
 **Options:**
@@ -124,7 +124,7 @@ The generated `.qmd` is saved to `reports/`. Rendered HTML is fully self-contain
 
 ```
 report_generator/
-├── Main.py                          # Pipeline orchestrator + mode config
+├── ReGen.py                         # Pipeline orchestrator + CLI entry point
 ├── input_processing/
 │   ├── reader.py                    # Source detection, download, MIME routing
 │   ├── chunker.py                   # Paragraph-based chunking with overlap
