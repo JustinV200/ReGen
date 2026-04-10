@@ -1,4 +1,4 @@
-# Report Generator
+# ReGen: AI powered report generator
 
 An automated pipeline that ingests documents or web pages, extracts structured data using LLMs, and generates polished statistical reports rendered with [Quarto](https://quarto.org).
 
@@ -101,8 +101,8 @@ report_generator/
 ```
 
 ## Roadmap
-- [ ] **Cleanup reports** - cleanup reports, better more detailed prompts
-- [ ] **Multiple source support** — Accept a list of URLs/files, parse and chunk each, merge all chunks before extraction to produce a single unified report from multiple sources.
-- [ ] **Report size tiers** — `brief`, `standard`, and `detailed` modes that control how much content the report writer generates (summary-only vs. full analysis with deep-dives).
+- [x] **Cleanup reports** - cleanup reports, better more detailed prompts
+- [x] **Multiple source support** — Accept a list of URLs/files, parse and chunk each, merge all chunks before extraction to produce a single unified report from multiple sources.
+- [x] **Report size tiers** — `brief`, `standard`, and `detailed` modes that control how much content the report writer generates (summary-only vs. full analysis with deep-dives).
 - [ ] **Research mode** — Given a topic, automatically search the web for relevant sources, rank them, and feed the best ones into the pipeline. Turns the tool into an autonomous research assistant.
 - [ ] **Local fine-tuned models** — Swap out cloud LLMs for locally-hosted models fine-tuned on domain-specific extraction and report writing tasks. Reduces cost, improves privacy, and allows offline use.
