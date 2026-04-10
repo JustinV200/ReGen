@@ -6,7 +6,7 @@ from .model import Model
 #final reduce consolidates everything into one extraction, this way LLM gets full document context since the compressed extractions now fit within the token limit
 #and we can handle arbitrarily long documents without losing key info or context
 class Extractor:
-    def __init__(self, model=None, max_tokens=3000):
+    def __init__(self, model=None, max_tokens=2000):
         self.model = model or Model()
         self.max_tokens = max_tokens
 
@@ -23,31 +23,64 @@ class Extractor:
     #go through all chunks, extract info, then reduce results
     def extract_all(self, chunks):
         extractions = []
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks, 1):
+            print(f"    Chunk {i}/{len(chunks)}...", end=" ", flush=True)
             result = self.extract_chunk(chunk)
             result["chunk_index"] = chunk["chunk_index"]
             extractions.append(result)
+            print("done")
         return extractions
     
     
+    def _safe_call(self, prompt, retries=2):
+        """Call model with retry on JSON parse errors."""
+        for attempt in range(retries):
+            try:
+                return self.model.call(prompt)
+            except json.JSONDecodeError:
+                if attempt < retries - 1:
+                    # Add instruction to keep response shorter
+                    prompt = prompt + "\n\nIMPORTANT: Keep the JSON response concise. Limit each list to the top 10 most important items."
+                else:
+                    raise
+
     #final run through of everything, reduce document and get the final key information
     def reduce(self, extractions):
         text = json.dumps(extractions, indent=2)
 
-        # if it fits, do the final reduce
+        # if it fits, do the final reduce in one call
         if len(text.split()) <= self.max_tokens:
             prompt = self.model.reduce_prompt + text
-            return self.model.call(prompt)
+            return self._safe_call(prompt)
 
-        # too big — split extractions into groups, reduce each group, then reduce again
-        #divide and conquor algorithm to handle large documents: recursively split extractions until they fit within token limit, then merge results up the chain
-        #straight from csci 311 so thats kinda cool ngl
-        mid = len(extractions) // 2
-        left = self.reduce(extractions[:mid])
-        right = self.reduce(extractions[mid:])
-        return self.reduce([left, right])
+        # too big — batch reduce: group into chunks of batch_size, reduce each group, then recurse
+        batch_size = 4
+        batches = [extractions[i:i+batch_size] for i in range(0, len(extractions), batch_size)]
+        reduced = []
+        for i, batch in enumerate(batches, 1):
+            print(f"    Reduce batch {i}/{len(batches)} ({len(batch)} items)...", end=" ", flush=True)
+            batch_text = json.dumps(batch, indent=2)
+            if len(batch_text.split()) <= self.max_tokens:
+                prompt = self.model.reduce_prompt + batch_text
+                reduced.append(self._safe_call(prompt))
+            else:
+                # batch still too big, halve it
+                mid = len(batch) // 2
+                left = self.reduce(batch[:mid])
+                right = self.reduce(batch[mid:])
+                reduced.append(self.reduce([left, right]))
+            print("done")
+
+        # if we're down to one result, we're done
+        if len(reduced) == 1:
+            return reduced[0]
+
+        # otherwise recurse on the reduced results
+        print(f"    Final merge of {len(reduced)} batches...")
+        return self.reduce(reduced)
 
     def run(self, chunks):
         extractions = self.extract_all(chunks)  # map
+        print(f"  Reducing {len(extractions)} extractions...")
         consolidated = self.reduce(extractions)  # reduce
         return consolidated
