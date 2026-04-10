@@ -74,16 +74,43 @@ $env:QUARTO_PYTHON = "C:\path\to\python.exe"
 
 ## Usage
 
-1. Open `Main.py` and set your sources and mode:
-
-```python
-sources = [
-    "https://example.com/article",
-    "https://example.com/report",
-    "data/study.pdf",
-]
-mode = "standard"  # "brief", "standard", or "detailed"
+```bash
+python Main.py [sources...] [options]
 ```
+
+**Examples:**
+
+```bash
+# Single URL, standard mode
+python Main.py https://example.com/article
+
+# Multiple sources with detailed mode, auto-render to HTML
+python Main.py https://example.com/article data/study.pdf -m detailed --render
+
+# Sources from a text file (one URL/path per line, # comments ignored)
+python Main.py sources.txt -m brief --name my_report
+
+# PDF output with custom model and verbose logging
+python Main.py paper.pdf -o pdf --model gpt-4o -v
+
+# Quiet mode — only errors and final path printed
+python Main.py https://example.com -q --render
+```
+
+**Options:**
+
+| Flag | Description | Default |
+|---|---|---|
+| `sources` | URLs, file paths, or `.txt` files (one source per line) | *(required)* |
+| `-m`, `--mode` | Report detail level: `brief`, `standard`, `detailed` | `standard` |
+| `-o`, `--output` | Output format: `html`, `pdf`, `docx` | `html` |
+| `--name` | Output filename (without extension) | `report` |
+| `--model` | LLM model name (any litellm-supported model) | `gpt-3.5-turbo` |
+| `--render` | Auto-render the `.qmd` with Quarto after generation | off |
+| `-v`, `--verbose` | Show chunk-level extraction and reduce progress | off |
+| `-q`, `--quiet` | Suppress all output except errors and final path | off |
+
+**Modes:**
 
 | Mode | Description |
 |---|---|
@@ -91,19 +118,7 @@ mode = "standard"  # "brief", "standard", or "detailed"
 | `standard` | Themes, cross-source findings, clusters — section-by-section |
 | `detailed` | Everything in standard + per-source deep-dives, more themes/takeaways |
 
-2. Run the pipeline:
-
-```bash
-python Main.py
-```
-
-3. The generated `.qmd` file is saved to `reports/`. Render it with:
-
-```bash
-quarto render reports/report.qmd
-```
-
-The rendered HTML is fully self-contained — open it on any machine, no extra files needed.
+The generated `.qmd` is saved to `reports/`. Rendered HTML is fully self-contained — open it on any machine, no extra files needed.
 
 ## Project Structure
 
@@ -120,8 +135,9 @@ report_generator/
 │       ├── pdf_parser.py
 │       ├── excelParser.py
 │       └── web_parser.py
+├── models/
+│   └── model.py                     # LLM wrapper (litellm, provider-agnostic)
 ├── extractor/
-│   ├── model.py                     # LLM wrapper (litellm, provider-agnostic)
 │   └── extractor.py                 # Map-reduce extraction pipeline
 ├── analyzer/
 │   └── analyzer.py                  # Per-source analysis, clustering, synthesis
@@ -141,4 +157,4 @@ report_generator/
 - [x] Self-contained HTML — `embed-resources` for portable single-file reports
 - [ ] **Research mode** — given a topic, auto-search the web for relevant sources and feed the best ones into the pipeline
 - [ ] **Local fine-tuned models** — swap cloud LLMs for locally-hosted models for cost, privacy, and offline use
-- [ ] **CLI interface** — command-line arguments for sources, mode, output format
+- [x] **CLI interface** — argparse-based CLI with sources, mode, output format, render, verbose/quiet flags

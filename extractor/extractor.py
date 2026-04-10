@@ -47,9 +47,10 @@ Chunk extractions:
 #final reduce consolidates everything into one extraction, this way LLM gets full document context since the compressed extractions now fit within the token limit
 #and we can handle arbitrarily long documents without losing key info or context
 class Extractor:
-    def __init__(self, model=None, max_tokens=2000):
+    def __init__(self, model=None, max_tokens=2000, verbose=False):
         self.model = model or Model()
         self.max_tokens = max_tokens
+        self.verbose = verbose
 
 
     # handline individual chunk
@@ -65,11 +66,13 @@ class Extractor:
     def extract_all(self, chunks):
         extractions = []
         for i, chunk in enumerate(chunks, 1):
-            print(f"    Chunk {i}/{len(chunks)}...", end=" ", flush=True)
+            if self.verbose:
+                print(f"    Chunk {i}/{len(chunks)}...", end=" ", flush=True)
             result = self.extract_chunk(chunk)
             result["chunk_index"] = chunk["chunk_index"]
             extractions.append(result)
-            print("done")
+            if self.verbose:
+                print("done")
         return extractions
     
     
@@ -99,7 +102,8 @@ class Extractor:
         batches = [extractions[i:i+batch_size] for i in range(0, len(extractions), batch_size)]
         reduced = []
         for i, batch in enumerate(batches, 1):
-            print(f"    Reduce batch {i}/{len(batches)} ({len(batch)} items)...", end=" ", flush=True)
+            if self.verbose:
+                print(f"    Reduce batch {i}/{len(batches)} ({len(batch)} items)...", end=" ", flush=True)
             batch_text = json.dumps(batch, indent=2)
             if len(batch_text.split()) <= self.max_tokens:
                 prompt = REDUCE_PROMPT + batch_text
@@ -111,18 +115,21 @@ class Extractor:
                 left = self.reduce(batch[:mid])
                 right = self.reduce(batch[mid:])
                 reduced.append(self.reduce([left, right]))
-            print("done")
+            if self.verbose:
+                print("done")
 
         # if we're down to one result, we're done
         if len(reduced) == 1:
             return reduced[0]
 
         # otherwise recurse on the reduced results
-        print(f"    Final merge of {len(reduced)} batches...")
+        if self.verbose:
+            print(f"    Final merge of {len(reduced)} batches...")
         return self.reduce(reduced)
 
     def run(self, chunks):
         extractions = self.extract_all(chunks)  # map
-        print(f"  Reducing {len(extractions)} extractions...")
+        if self.verbose:
+            print(f"  Reducing {len(extractions)} extractions...")
         consolidated = self.reduce(extractions)  # reduce
         return consolidated

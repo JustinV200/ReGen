@@ -1,6 +1,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import argparse
+import os
+import subprocess
+import sys
 from input_processing import Reader, chunker
 from models import Model
 from extractor import Extractor
@@ -49,68 +53,157 @@ def get_mode_config(mode, num_sources):
     return base[mode]
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="regen",
+        description="ReGen: AI-powered report generator"
+    )
+    # allow multiple sources as command-line arguments, or a .txt file with one source per line
+    parser.add_argument(
+        "sources", nargs="+",
+        help="URLs, file paths, or .txt files containing one source per line"
+    )
+    #pick amount of detal that you want in the report, more detail = more tokens used = higher cost
+    parser.add_argument(
+        "-m", "--mode", choices=["brief", "standard", "detailed"],
+        default="standard", help="Report detail level (default: standard)"
+    )
+    #output format, default to html
+    parser.add_argument(
+        "-o", "--output", choices=["html", "pdf", "docx"],
+        default="html", help="Output format (default: html)"
+    )
+    #name of the output file without extension
+    parser.add_argument(
+        "--name", default="report",
+        help="Output filename without extension (default: report)"
+    )
+    #LLM model to use, default to gpt-3.5-turbo, but allow any model supported by litell
+    parser.add_argument(
+        "--model", default="gpt-3.5-turbo",
+        help="LLM model name (default: gpt-3.5-turbo)"
+    )
+    #option to auto render or not
+    parser.add_argument(
+        "--render", action="store_true", default=False,
+        help="Auto-render the .qmd with Quarto after generation"
+    )
+    #verbose mode to show detailed progress, including chunk-level extraction and reduce steps
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", default=False,
+        help="Show detailed progress (chunk-level extraction, reduce steps)"
+    )
+    #quiet mode to suppress all output except errors and final report path
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", default=False,
+        help="Suppress all output except errors and final report path"
+    )
+    return parser.parse_args()
 
 
+def resolve_sources(raw_sources):
+    """Expand .txt files into individual sources, one per line."""
+    sources = []
+    for s in raw_sources:
+        if s.endswith(".txt") and os.path.isfile(s):
+            with open(s, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        sources.append(line)
+        else:
+            sources.append(s)
+    return sources
 
+# Simple logging function that respects quiet mode
+def log(msg, quiet=False):
+    if not quiet:
+        print(msg)
 
 
 def main():
-    #sources = [
-    #    "https://www.usatoday.com/story/news/health/2025/09/15/covid-19-september-2025-cases-variants-symptoms-vaccines/86163707007/",
-    #    "https://www.cdc.gov/covid/php/surveillance/index.html",
-    #    "https://pmc.ncbi.nlm.nih.gov/articles/PMC9874793/",
-    #    "https://data.who.int/dashboards/covid19/summary",
-    #    "https://www.cdc.gov/covid/about/index.html"
+    args = parse_args()
 
-    #]
-    sources = ["https://www.yahoo.com/news/articles/anthropic-claude-mythos-model-sparks-202726438.html?guccounter=1&guce_referrer=aHR0cHM6Ly93d3cuYmluZy5jb20v&guce_referrer_sig=AQAAAAHegMlBVKKEMWo1s2T6ZrOMyGfLkfN5EtJdkgqw-7Z2E1DGCrGap2UQ-I0v7O0uTCmdWAAM0ewvDofcpPEM-i99qYWq9vUbMcnpg98fuE8O681rEtao9iZuqLfiLRCGxhlwxTAYnGY8JCv8DiJycccCMrgE2of37qsio4skXa63",
-               "https://www.theatlantic.com/technology/2026/04/claude-mythos-hacking/686746/",
-               "https://www.nextbigfuture.com/2026/04/claude-mythos-will-uplevel-ai-again.html"]'
-    mode = "standard" #"standard" or "brief" or "detailed"
-    print(f"Running in {mode} mode with {len(sources)} sources...")
-    model = Model()
+    if args.verbose and args.quiet:
+        print("Error: --verbose and --quiet cannot be used together.", file=sys.stderr)
+        sys.exit(1)
+
+    sources = resolve_sources(args.sources)
+    #error handling for no sources
+    if not sources:
+        print("Error: No sources provided.", file=sys.stderr)
+        sys.exit(1)
+
+    mode = args.mode
+    log(f"Running in {mode} mode with {len(sources)} sources...", args.quiet)
+    # get model and config based on mode and number of sources
+    model = Model(model_name=args.model)
     config = get_mode_config(mode, len(sources))
 
-    # Step 1-3: For each source, read, parse, chunk, and extract
+    # For each source, read, parse, chunk, and extract
     extractions = []
-    print("Extracting information from sources...")
+    log("Extracting information from sources...", args.quiet)
     for i, source in enumerate(sources, 1):
-        print(f"\n[{i}/{len(sources)}] Processing: {source[:80]}...")
+        log(f"\n[{i}/{len(sources)}] Processing: {source[:80]}...", args.quiet)
         try:
+            #read the source and get the file type, send to relevent parser
             reader = Reader(source)
+            #parse the data
             parsed = reader.parse()
+            #chunk the data into smaller pieces for extraction
             chunks = chunker(parsed)
+        #error handling
         except Exception as e:
-            print(f"  Failed to read source: {e}")
+            log(f"  Failed to read source: {e}", args.quiet)
             continue
         if not chunks:
-            print(f" No content extracted, skipping")
+            log(f"  No content extracted, skipping", args.quiet)
             continue
-        print(f"  → {len(chunks)} chunks to extract")
-        extractor = Extractor(model=model)
+        log(f"  → {len(chunks)} chunks to extract", args.quiet)
+        #extract key information from the chunks using the model, recursively make smaller and smaller until below max token size, then reduce all the chunks into one final extraction for this source
+        extractor = Extractor(model=model, verbose=args.verbose)
         result = extractor.run(chunks)
         # Skip empty/unknown extractions
         if not result or (not result.get("entities") and not result.get("statistics") and not result.get("claims")):
-            print(f" No meaningful data extracted, skipping")
+            log(f"  No meaningful data extracted, skipping", args.quiet)
             continue
         extractions.append(result)
-        print(f"  ✓ Source {i} done")
+        log(f"  ✓ Source {i} done", args.quiet)
 
     if not extractions:
-        print("No usable data from any source. Exiting.")
-        return
+        print("No usable data from any source. Exiting.", file=sys.stderr)
+        sys.exit(1)
 
-    # Step 4: Analyze and synthesize
-    print("Analyzing and synthesizing extracted information...")
+    # Sanaylze each source's extraction, break into clusters if needed, if standard/detailed mode synthesize 
+    # insights from medium/high relevance clusters, and identify key themes and takeaways across source
+    #  then synthesize into overall insights and themes across sources
+    log("Analyzing and synthesizing extracted information...", args.quiet)
     analyzer = Analyzer(model=model, config=config)
     analysis = analyzer.run(extractions)
 
-    # Step 5: Generate report
-    print("Generating report...")
+    # use the analysis to generate a report in the requested format, save to disk, and optionally render with Quarto
+    log("Generating report...", args.quiet)
     report = reportMaker(model=model, config=config)
-    report_path = report.generate(analysis)
+    report_path = report.generate(analysis, report_name=args.name, output_format=args.output)
+    log(f"Report saved to: {report_path}", args.quiet)
 
-    print(f"Report saved to: {report_path}")
+    # Step 6: Render with Quarto if requested
+    if args.render:
+        log("Rendering with Quarto...", args.quiet)
+        result = subprocess.run(
+            ["quarto", "render", report_path],
+            capture_output=args.quiet,
+        )
+        if result.returncode == 0:
+            rendered = report_path.replace(".qmd", f".{args.output}")
+            print(rendered)
+        else:
+            print(f"Quarto render failed (exit code {result.returncode})", file=sys.stderr)
+            if args.quiet and result.stderr:
+                print(result.stderr.decode(), file=sys.stderr)
+            sys.exit(1)
+    elif not args.quiet:
+        print(f"\nRun 'quarto render {report_path}' to render the report.")
 
 if __name__ == "__main__":
     main()
