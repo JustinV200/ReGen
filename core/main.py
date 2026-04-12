@@ -9,7 +9,7 @@ from extractor import Extractor
 from analyzer import Analyzer
 from reportgenerator import reportMaker
 
-from core.config import get_mode_config
+from config import get_mode_config
 from core.cli import parse_args, resolve_sources, log
 
 
