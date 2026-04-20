@@ -86,6 +86,8 @@ RULES:
 - Before using rewrite_section or add_section for a comparison/cross-source section, verify 2+ sources exist. If only one source, use refuse
 - When in doubt between acting and refusing: refuse. Never fabricate data to satisfy a request
 - Use the session history to interpret pronouns and follow-ups ("change it back", "make that chart bigger") — resolve them against the most recent edits
+- NEVER return an empty actions list. Every plan MUST contain at least one action. If the user's request cannot be satisfied, use refuse. If it is unclear, use ask_followup. Do not respond with reasoning alone.
+- When the user's request includes "(clarification you asked:...)" and "(user's answer:...)", treat it as the completed clarification round — pick a concrete edit action now, do NOT ask another ask_followup unless the answer is still genuinely ambiguous.
 
 Current report sections:
 {section_list}

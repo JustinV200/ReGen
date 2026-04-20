@@ -79,13 +79,28 @@ class ReportEditor:
         self.history = []
         self.max_history = 6
 
+        # When the planner asks a clarifying question, remember the original
+        # request so the NEXT user reply can be merged with it rather than
+        # planned in isolation (which usually yields an empty action list).
+        self._pending_followup = None  # {"original": str, "question": str}
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def query(self, user_request):
         """Run one edit cycle: plan → (ask/refuse or execute) → save if changed."""
-        plan = self._plan(user_request)
+        # If the previous turn asked a clarifying question, merge the user's
+        # reply with the original request so the planner has full intent.
+        effective_request = user_request
+        if self._pending_followup:
+            effective_request = (
+                f"{self._pending_followup['original']}\n"
+                f"(clarification you asked: {self._pending_followup['question']})\n"
+                f"(user's answer: {user_request})"
+            )
+
+        plan = self._plan(effective_request)
         actions = plan.get("actions", [])
         reasoning = plan.get("reasoning", "")
 
@@ -96,16 +111,16 @@ class ReportEditor:
         if not actions:
             resp = EditorResponse("noop", reasoning or "No changes identified.", plan=plan)
             self._record_turn(user_request, resp)
+            self._pending_followup = None
             return resp
 
         first = actions[0]
         if first["type"] == "ask_followup":
-            resp = EditorResponse(
-                "followup",
-                first.get("params", {}).get("question", "Could you clarify?"),
-                plan=plan,
-            )
+            question = first.get("params", {}).get("question", "Could you clarify?")
+            resp = EditorResponse("followup", question, plan=plan)
             self._record_turn(user_request, resp)
+            # Remember the original request so the next reply is merged with it.
+            self._pending_followup = {"original": effective_request, "question": question}
             return resp
         if first["type"] == "refuse":
             resp = EditorResponse(
@@ -114,6 +129,7 @@ class ReportEditor:
                 plan=plan,
             )
             self._record_turn(user_request, resp)
+            self._pending_followup = None
             return resp
 
         # Execute normal edit actions in order.
@@ -144,6 +160,8 @@ class ReportEditor:
             summary=summary,
         )
         self._record_turn(user_request, resp)
+        # A non-followup, non-refuse result clears any pending clarification.
+        self._pending_followup = None
         return resp
 
     # ------------------------------------------------------------------

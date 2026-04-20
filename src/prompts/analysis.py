@@ -23,7 +23,7 @@ Return ONLY valid JSON in this exact format:
         {"claim": "the claim", "strength": "strong|moderate|weak", "reasoning": "why you rated it this way"}
     ],
     "suggested_visuals": [
-        {"title": "chart title", "chart_type": "bar|line|pie|hbar|grouped_bar|scatter", "data_points": [{"label": "x", "value": 0}], "rationale": "why this visualization is useful"}
+        {"title": "chart title", "chart_type": "bar|line|pie|hbar|grouped_bar|scatter", "measurement_type": "the shared measurement_type across all data_points", "comparison_scope": "the shared comparison_scope across all data_points", "data_points": [{"label": "x", "value": 0, "measurement_type": "inherited from source statistic", "comparison_scope": "inherited from source statistic"}], "rationale": "why this visualization is useful", "caveats": ["any known comparability limitations, e.g. 'confirmed cases track reporting capacity, not true infection rate'"]}
     ],
     "unanswered_questions": ["gaps or things the source doesn't address"]
 }
@@ -32,7 +32,10 @@ RULES:
 - Only suggest a visualization if 2+ related data points exist for it
 - Every data_point.value MUST be an exact number copied from the extraction's statistics — never estimate, round, or invent a number
 - Every data_point.label MUST describe what that number measures, using the same wording as the extraction
-- If you cannot fill at least 2 data_points with real extracted numbers, do NOT suggest the visualization
+- Every data_point MUST inherit measurement_type and comparison_scope from its source statistic
+- All data_points in a single visualization MUST share the same measurement_type and comparison_scope. If they do not, do NOT suggest that visualization — the numbers are not directly comparable.
+- If you suggest a visualization whose measurement_type has known interpretation pitfalls (e.g. "confirmed cases" across countries with different testing capacity, "reported" vs "actual" figures), add a one-sentence caveat to the caveats list
+- If you cannot fill at least 2 data_points with real extracted numbers that share measurement_type and comparison_scope, do NOT suggest the visualization
 - Do NOT put unrelated metrics in the same visualization
 - Whenever you find 2+ comparable statistics (e.g. rates across age groups, counts over time, category breakdowns), include a suggested_visuals entry — prefer creating a visualization over leaving comparable numbers as text only
 - Rate insight significance based on magnitude, novelty, and actionability
@@ -99,7 +102,7 @@ Return ONLY valid JSON in this exact format:
     "source_clusters": {cluster_instruction},
     "cross_source_findings": {cross_source_instruction},
     "visualizations": [
-        {{"title": "chart title", "chart_type": "bar|line|pie|hbar|grouped_bar|scatter", "data_points": [{{"label": "x", "value": 0}}], "rationale": "why this chart matters in the overall narrative"}}
+        {{"title": "chart title", "chart_type": "bar|line|pie|hbar|grouped_bar|scatter", "measurement_type": "shared across all data_points", "comparison_scope": "shared across all data_points", "data_points": [{{"label": "x", "value": 0, "measurement_type": "inherited", "comparison_scope": "inherited"}}], "rationale": "why this chart matters in the overall narrative", "caveats": ["any comparability caveats"]}}
     ],
     "narrative_order": ["ordered list of theme names suggesting how the report should flow"],
     "key_takeaways": ["each takeaway must be a full sentence with specific data points — produce exactly {max_takeaways}"]
@@ -118,6 +121,9 @@ RULES:
 - If the source data lacks enough real numbers for a visualization, set visualizations to an empty list [] rather than inventing data
 - NEVER pad a visualization with made-up data points to reach a minimum count — only include data points backed by real extracted numbers
 - NEVER invert or contradict what the data says — if source data says X > Y, the visualization must reflect that
+- A visualization's data_points MUST all share the same measurement_type and comparison_scope. Do NOT mix e.g. confirmed cases with seroprevalence estimates, or nationwide totals with per-capita rates.
+- When combining visualizations from different sources, verify measurement_types match before merging. If they don't, keep them as separate charts or drop the merge.
+- If a visualization's measurement_type has known interpretation pitfalls (e.g. confirmed cases reflect testing capacity as much as true spread), include a caveat in the caveats list so the report writer can surface it.
 - Order the narrative logically: most important themes first, supporting detail after
 - If there is only one source, still produce themes and takeaways — set cross_source_findings and source_clusters to empty lists []
 - Each key_takeaway must be a full sentence with specific data points, not a vague summary

@@ -61,17 +61,44 @@ class reportMaker:
     def _validate_visuals(self, visualizations, all_stats):
         """Filter out visualizations that fail basic quality checks.
         Strips individual fabricated data points, then checks remaining quality.
+        Also rejects charts whose data_points mix incompatible measurement
+        types or comparison scopes (e.g. confirmed cases + seroprevalence).
         Falls back to lighter checks if strict validation kills everything."""
         # Pre-extract all numeric values from raw stats for efficient matching
         all_numbers = set()
         for stat in all_stats:
             all_numbers.update(self._extract_numbers(stat))
 
+        def _comparable(points):
+            """Return True if all points share measurement_type+comparison_scope.
+
+            Missing / 'unspecified' values are treated as wildcards so older
+            analyses (without these fields) still pass. Only a concrete mismatch
+            between two specified values rejects the chart.
+            """
+            mtypes = {
+                str(p.get("measurement_type", "")).strip().lower()
+                for p in points
+                if p.get("measurement_type") and str(p.get("measurement_type")).strip().lower() != "unspecified"
+            }
+            scopes = {
+                str(p.get("comparison_scope", "")).strip().lower()
+                for p in points
+                if p.get("comparison_scope") and str(p.get("comparison_scope")).strip().lower() != "unspecified"
+            }
+            return len(mtypes) <= 1 and len(scopes) <= 1
+
         strict_valid = []
         light_valid = []
         for vis in visualizations:
             original_points = vis.get("data_points", [])
             if not original_points:
+                continue
+
+            # Reject charts mixing incompatible metrics outright.
+            if not _comparable(original_points):
+                if self.config.get("verbose"):
+                    print(f"  Dropping chart '{vis.get('title')}' — mixed measurement_type/comparison_scope")
                 continue
 
             # Light validation: 2+ non-zero data points (no stat matching)
@@ -96,7 +123,7 @@ class reportMaker:
                         continue
                     if self._matches_any_stat(v, all_numbers):
                         verified_points.append(p)
-                if len(verified_points) >= 2:
+                if len(verified_points) >= 2 and _comparable(verified_points):
                     vis_copy = dict(vis)
                     vis_copy["data_points"] = verified_points
                     strict_valid.append(vis_copy)
