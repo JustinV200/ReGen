@@ -23,6 +23,7 @@ from prompts.edit import (
     REFORMAT_SECTION_PROMPT,
     NEW_VISUALIZATION_PROMPT,
     EDIT_VISUALIZATION_PROMPT,
+    RECONCILE_PROSE_PROMPT,
     REANALYZE_PROMPT,
 )
 
@@ -30,16 +31,17 @@ from prompts.edit import (
 class EditorResponse:
     """Result of a query — either a message for the user or a record of changes applied."""
 
-    def __init__(self, kind, message="", actions_applied=None, plan=None):
+    def __init__(self, kind, message="", actions_applied=None, plan=None, summary=""):
         # kind is one of: "applied", "followup", "refused", "noop"
         self.kind = kind
         self.message = message
         self.actions_applied = actions_applied or []
         self.plan = plan or {}
+        # Short human-readable description of what actually changed.
+        self.summary = summary
 
     def __str__(self):
         return f"[{self.kind}] {self.message}"
-
 
 class ReportEditor:
     """Agent that plans and executes edits to a Quarto .qmd report.
@@ -71,6 +73,12 @@ class ReportEditor:
         self.sections = self._split_sections()
         self.visualizations = self._extract_viz_blocks()
 
+        # Per-session turn log — fed back into the planner so follow-up
+        # requests like "undo that" or "make it bigger" have context.
+        # Each entry: {"request": str, "kind": str, "summary": str, "actions": [str]}.
+        self.history = []
+        self.max_history = 6
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -86,28 +94,36 @@ class ReportEditor:
 
         # Handle terminal actions first — these never modify the report.
         if not actions:
-            return EditorResponse("noop", reasoning or "No changes identified.", plan=plan)
+            resp = EditorResponse("noop", reasoning or "No changes identified.", plan=plan)
+            self._record_turn(user_request, resp)
+            return resp
 
         first = actions[0]
         if first["type"] == "ask_followup":
-            return EditorResponse(
+            resp = EditorResponse(
                 "followup",
                 first.get("params", {}).get("question", "Could you clarify?"),
                 plan=plan,
             )
+            self._record_turn(user_request, resp)
+            return resp
         if first["type"] == "refuse":
-            return EditorResponse(
+            resp = EditorResponse(
                 "refused",
                 first.get("params", {}).get("reason", "Request cannot be satisfied."),
                 plan=plan,
             )
+            self._record_turn(user_request, resp)
+            return resp
 
         # Execute normal edit actions in order.
         applied = []
+        applied_details = []
         for action in actions:
             try:
                 self._dispatch(action)
                 applied.append(action["type"])
+                applied_details.append(action)
             except Exception as e:
                 if self.verbose:
                     print(f"  Action {action['type']} failed: {e}")
@@ -119,12 +135,16 @@ class ReportEditor:
             self.sections = self._split_sections()
             self.visualizations = self._extract_viz_blocks()
 
-        return EditorResponse(
+        summary = self._summarize(applied_details, reasoning) if applied else ""
+        resp = EditorResponse(
             "applied" if applied else "noop",
             reasoning,
             actions_applied=applied,
             plan=plan,
+            summary=summary,
         )
+        self._record_turn(user_request, resp)
+        return resp
 
     # ------------------------------------------------------------------
     # Planner
@@ -140,8 +160,59 @@ class ReportEditor:
             visualization_list=json.dumps(viz_titles, indent=2),
             data_inventory=json.dumps(self._data_inventory(), indent=2),
             analysis_keys=json.dumps(self._analysis_shape(), indent=2),
+            history=self._format_history(),
         )
         return self.model.call(prompt)
+
+    def _format_history(self):
+        """Render recent turns as a compact bulleted log for the planner."""
+        if not self.history:
+            return "(none)"
+        lines = []
+        for turn in self.history[-self.max_history:]:
+            detail = turn["summary"] or turn["kind"]
+            lines.append(f"- user: {turn['request']}\n  result: {detail}")
+        return "\n".join(lines)
+
+    def _record_turn(self, request, resp):
+        """Append this turn to session history (capped at max_history)."""
+        self.history.append({
+            "request": request,
+            "kind": resp.kind,
+            "summary": resp.summary or resp.message,
+            "actions": list(resp.actions_applied),
+        })
+        # Cap to keep planner prompts bounded.
+        if len(self.history) > self.max_history * 2:
+            self.history = self.history[-self.max_history * 2:]
+
+    def _summarize(self, actions, reasoning):
+        """Build a concrete one-line summary of what the editor just did.
+
+        Uses the action types and parameters directly so there's no extra LLM
+        call — the planner's reasoning is already on the EditorResponse.
+        """
+        parts = []
+        for a in actions:
+            t = a.get("type")
+            p = a.get("params", {}) or {}
+            if t == "rewrite_section":
+                parts.append(f"rewrote “{p.get('section', '?')}”")
+            elif t == "add_section":
+                parts.append(f"added section “{p.get('title', '?')}”")
+            elif t == "remove_section":
+                parts.append(f"removed “{p.get('section', '?')}”")
+            elif t == "reformat_section":
+                parts.append(f"reformatted “{p.get('section', '?')}”")
+            elif t == "new_visualization":
+                parts.append(f"added chart “{p.get('title', '?')}” in “{p.get('section', '?')}”")
+            elif t == "edit_visualization":
+                parts.append(f"updated chart “{p.get('chart_title', '?')}”")
+            elif t == "reanalyze":
+                parts.append(f"reanalyzed with focus “{p.get('focus', '?')}”")
+            else:
+                parts.append(t)
+        return "; ".join(parts)
 
     def _data_inventory(self):
         """Summarize what's actually available — used by the planner to decide
@@ -278,14 +349,17 @@ class ReportEditor:
             chart_type=chart_type,
             chart_title=title,
             rationale=rationale,
+            section_context=self._section_prose(sec),
         ) + json.dumps(data_points, indent=2)
         block = self.model.call_raw(prompt).strip()
         if not block or "```{python}" not in block:
             return
 
-        # Append the new block to the end of the target section.
+        # Append the new block to the end of the target section, then refresh
+        # the surrounding prose so it accurately describes the new chart.
         new_content = sec["content"].rstrip() + "\n\n" + block + "\n"
         self._replace_section(sec, new_content)
+        self._reconcile_section_prose(sec["title"], title)
 
     # ------------------------------------------------------------------
     # Action: modify an existing visualization's styling
@@ -296,8 +370,13 @@ class ReportEditor:
         if not viz:
             raise ValueError(f"Visualization not found: {chart_title}")
 
+        # Find which section this chart lives in so we can pass its prose
+        # as context and reconcile it afterward.
+        parent_sec = self._section_containing(viz["start"])
+
         prompt = EDIT_VISUALIZATION_PROMPT.format(
             user_instruction=instruction,
+            section_context=self._section_prose(parent_sec) if parent_sec else "",
         ) + viz["block"]
         new_block = self.model.call_raw(prompt).strip()
         if not new_block or "```{python}" not in new_block:
@@ -307,8 +386,10 @@ class ReportEditor:
         # from the original block that the new block is missing.
         new_block = self._repair_viz_block(new_block, viz["block"])
 
-        # Splice the new block in place of the old one.
+        # Splice the new block in place of the old one, then refresh prose.
         self.qmd = self.qmd[:viz["start"]] + new_block + self.qmd[viz["end"]:]
+        if parent_sec:
+            self._reconcile_section_prose(parent_sec["title"], chart_title)
 
     def _repair_viz_block(self, new_block, old_block):
         """Re-inject imports the LLM may have dropped when editing a viz block.
@@ -334,6 +415,45 @@ class ReportEditor:
 
         repaired_body = "\n".join(missing) + "\n" + new_body.lstrip("\n")
         return "```{python}\n" + repaired_body + "```"
+
+    def _section_prose(self, sec):
+        """Return the section content with ```{python} code blocks stripped out.
+
+        Used as narrative context when generating/editing charts so the model
+        picks data and framing that align with the surrounding writing.
+        """
+        if not sec:
+            return ""
+        return re.sub(r"```\{python\}\n.*?```\n?", "", sec["content"], flags=re.DOTALL)
+
+    def _section_containing(self, offset):
+        """Return the section dict whose byte range contains *offset*."""
+        for sec in self.sections:
+            if sec["start"] <= offset < sec["end"]:
+                return sec
+        return None
+
+    def _reconcile_section_prose(self, section_title, chart_title):
+        """Rewrite the interpretive prose around a just-changed chart so it
+        matches what the chart now displays. The code block itself is left
+        byte-for-byte intact by the prompt contract."""
+        # Refresh in-memory section state since the .qmd was just mutated.
+        self.sections = self._split_sections()
+        sec = self._find_section(section_title)
+        if not sec:
+            return
+
+        prompt = RECONCILE_PROSE_PROMPT.format(chart_title=chart_title) + sec["content"]
+        new_content = self.model.call_raw(prompt).strip()
+        if not new_content:
+            return
+        # Only accept the rewrite if the code block survived intact; otherwise
+        # fall back to the unmodified section to avoid breaking the chart.
+        if "```{python}" in sec["content"] and "```{python}" not in new_content:
+            return
+        self._replace_section(sec, new_content)
+        # Refresh viz index since offsets changed.
+        self.visualizations = self._extract_viz_blocks()
 
     # ------------------------------------------------------------------
     # Action: re-run synthesis with a new focus

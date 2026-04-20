@@ -85,6 +85,7 @@ RULES:
 - Before using new_visualization, verify the analysis data actually contains 2+ comparable numeric data points. If it does not, use refuse instead of generating a fake chart
 - Before using rewrite_section or add_section for a comparison/cross-source section, verify 2+ sources exist. If only one source, use refuse
 - When in doubt between acting and refusing: refuse. Never fabricate data to satisfy a request
+- Use the session history to interpret pronouns and follow-ups ("change it back", "make that chart bigger") — resolve them against the most recent edits
 
 Current report sections:
 {section_list}
@@ -97,6 +98,9 @@ Data inventory (what's actually available in the analysis):
 
 Available analysis data keys:
 {analysis_keys}
+
+Recent edits in this session (oldest first, may be empty):
+{history}
 
 User request:
 {user_request}
@@ -201,12 +205,16 @@ Chart type: {chart_type}
 Chart title: {chart_title}
 Rationale: {rationale}
 
+Surrounding section content (the chart must support and align with this narrative):
+{section_context}
+
 Return ONLY a single ```{{python}} ... ``` code block — no markdown headers, no prose, no explanation.
 
 RULES:
 - Use matplotlib and/or seaborn — import both at the top of the block
 - Use EXACT numeric values from the data below — never invent, estimate, or round
 - Every label must be a real, descriptive name from the data (no "Category 1")
+- Pick data points and framing that reinforce the section's narrative — do not choose metrics that contradict or are unrelated to the surrounding text
 - The chart must have a title, axis labels, and plt.tight_layout() before plt.show()
 - Set figure size with plt.figure(figsize=(10, 6))
 - Use plt.barh for horizontal bar when labels are long
@@ -227,15 +235,43 @@ EDIT_VISUALIZATION_PROMPT = """You are modifying an existing ```{{python}} visua
 
 Modification request: {user_instruction}
 
+Surrounding section content (the chart must continue to support this narrative):
+{section_context}
+
 STRICT RULES:
 - Do NOT change the underlying data values or labels
 - Only change presentational aspects: chart type, colors/palette, figure size, axis labels, title styling, legend placement, orientation
 - PRESERVE every import statement from the original block (matplotlib.pyplot as plt, seaborn as sns, pandas as pd, etc.) — the chart will fail to render without them
 - PRESERVE plt.figure(...), plt.tight_layout(), and plt.show() calls
-- Keep the chart's title descriptive of what the data shows
+- Keep the chart's title descriptive of what the data shows AND consistent with the surrounding narrative
 - Return a COMPLETE, self-contained ```{{python}} ... ``` code block that runs on its own — no explanation, no wrapping
 
 Original code block:
+"""
+
+
+# ---------------------------------------------------------------------------
+# RECONCILE SECTION PROSE WITH UPDATED VISUALIZATION
+# ---------------------------------------------------------------------------
+# After a chart is added or edited, the 2-3 sentences of prose that interpret
+# it may no longer match. This prompt rewrites only the interpretive sentences
+# adjacent to the chart, leaving everything else (section header, other prose,
+# chart code) untouched.
+# Format placeholders: {chart_title}.
+RECONCILE_PROSE_PROMPT = """You are updating a Quarto (.qmd) report section whose visualization was just changed.
+
+The chart titled "{chart_title}" in this section was modified. The prose around it may no longer accurately describe what the chart shows or may contradict its framing.
+
+Your job:
+- Rewrite ONLY the sentences that interpret or reference the chart so they match what the chart now displays
+- Preserve the section's ## or ### header byte-for-byte
+- Preserve the ```{{python}} code block byte-for-byte — do NOT modify it
+- Preserve every other sentence in the section that does not directly reference the chart
+- Do NOT introduce new facts, numbers, or claims — only re-describe what the chart shows using the data already in the chart
+- Keep the tone, voice, and length consistent with the rest of the report
+- Return ONLY the full updated section in .qmd markdown — no explanation, no wrapping
+
+Original section:
 """
 
 

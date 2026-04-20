@@ -157,7 +157,10 @@ def _run_edit(args):
         elif response.kind == "refused":
             print(f"! {response.message}")
         elif response.kind == "applied":
-            print(f"✓ Applied: {', '.join(response.actions_applied)}")
+            if response.summary:
+                print(f"✓ {response.summary}")
+            else:
+                print(f"✓ Applied: {', '.join(response.actions_applied)}")
             if args.verbose and response.message:
                 print(f"  ({response.message})")
         else:
