@@ -218,6 +218,7 @@ class TestExtractTitle(unittest.TestCase):
     def test_empty_input(self):
         self.assertEqual(n._extract_title([], body_start=0), "Untitled Report")
 
+from pipeline.notion_integration.notion import push_to_notion, push_analysis_to_notion
 
 # ---------------------------------------------------------------------------
 # _extract_summary
@@ -773,4 +774,4 @@ class TestLiveIntegration(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

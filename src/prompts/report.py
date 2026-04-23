@@ -109,6 +109,7 @@ VISUALIZATION RULES:
 - NEVER use placeholder labels like 'Category 1', 'Category 2', etc. — every label must be a real, descriptive name from the data
 - NEVER invent fake data_points. If the visualization spec has no meaningful data, skip it
 - If a source has no extractable data or is labeled 'Unknown', skip it entirely — do not write a section for it
+- If the visualization spec has a non-empty `caveats` array, render each caveat as an italic note on its own line immediately after the ```{{python}} block, formatted like: *Note: <caveat text>*
 
 Return ONLY the raw .qmd content. No wrapping, no explanation.
 
@@ -151,6 +152,7 @@ VISUALIZATION RULES (if applicable):
 - Use separate ```{{python}} code blocks for separate visualizations
 - Set figure size with plt.figure(figsize=(10, 6))
 - Use seaborn (sns) for cleaner styling
+- If the visualization spec has a non-empty `caveats` array, render each caveat as an italic note on its own line immediately after the ```{{python}} block, formatted like: *Note: <caveat text>*
 
 Write this section now:
 {section_instruction}
